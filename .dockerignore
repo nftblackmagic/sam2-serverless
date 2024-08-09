@@ -1,0 +1,41 @@
+# Ignore git directory
+.git
+
+# Ignore any .log files
+*.log
+
+# Ignore python cache files
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore checkpoints directory (if you're downloading these during the build process)
+checkpoints/
+
+# Ignore any local configuration files
+*.env
+
+# Ignore any temporary files
+*.tmp
+
+# Ignore Docker files themselves
+Dockerfile
+.dockerignore
+
+# Ignore any other files or directories that are not needed in the image
+# Add more patterns as needed
+
+.vscode/
+.DS_Store
+__pycache__/
+*-checkpoint.ipynb
+.venv
+*.egg*
+build/*
+_C.*
+outputs/*
+checkpoints/*.pt
+temp_frames_*
+static/*
+debug_frames*

@@ -1,0 +1,14 @@
+{
+    "session_id": "56371269-1b54-4d13-9721-18768a9c21a9",
+    "clicks": [
+      {
+        "points": [[
+            603,
+            866
+        ]],
+        "labels": [1],
+        "ann_frame_idx": 0,
+        "ann_obj_id": 1
+      }
+    ]
+  }
