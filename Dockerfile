@@ -16,7 +16,12 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     libxext6 \
     libxrender-dev \
+    build-essential \
+    cmake \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip
+RUN pip install --upgrade pip
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -33,8 +38,5 @@ RUN ./download_ckpts.sh
 # Move the downloaded checkpoints to the checkpoints directory
 RUN mv *.pt checkpoints/
 
-# Upgrade pip
-RUN pip install --upgrade pip
-
 # Set the entry point to your Python script
-CMD ["python", "sam2_serverless.py"]
+CMD ["python", "-u", "sam2_serverless.py"]
