@@ -8,8 +8,13 @@ import logging
 import base64
 import requests
 from sam2.build_sam import build_sam2_video_predictor
+from sam2.sam2_image_predictor import SAM2ImagePredictor
+from sam2.build_sam import build_sam2
+
 from tqdm import tqdm
 import runpod
+from io import BytesIO
+from PIL import Image
 
 
 # Set up logging
@@ -339,6 +344,167 @@ def process_video(job):
         "mask_video_url": bytescale_mask_video_url,
         "session_id": session_id,
     }
+    
+def draw_single_image(mask, image, random_color=False, borders=True):
+    if random_color:
+        color = np.concatenate([np.random.random(3), np.array([0.6])], axis=0)
+    else:
+        color = np.array([30/255, 144/255, 255/255, 0.6])
+    h, w = mask.shape[-2:]
+    mask = mask.astype(np.uint8)
+    mask_image = mask.reshape(h, w, 1) * color.reshape(1, 1, -1)
+    
+    if borders:
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        contours = [cv2.approxPolyDP(contour, epsilon=0.01, closed=True) for contour in contours]
+        mask_image = cv2.drawContours(mask_image, contours, -1, (1, 1, 1, 0.5), thickness=2)
+    
+    # Convert mask_image to uint8 and ensure it has the same number of channels as the original image
+    mask_image = (mask_image * 255).astype(np.uint8)
+    if mask_image.shape[-1] == 4 and image.shape[-1] == 3:
+        mask_image = cv2.cvtColor(mask_image, cv2.COLOR_RGBA2RGB)
+    elif mask_image.shape[-1] == 3 and image.shape[-1] == 4:
+        mask_image = cv2.cvtColor(mask_image, cv2.COLOR_RGB2RGBA)
+    
+    # Ensure mask_image has the same shape as the original image
+    mask_image = cv2.resize(mask_image, (image.shape[1], image.shape[0]))
+    
+    return cv2.addWeighted(image, 1, mask_image, 0.5, 0)
 
-runpod.serverless.start({"handler": process_video})
+
+def process_single_image(job):
+    job_input = job["input"]
+    image_url = job_input.get("input_image_url")
+    points = job_input.get("points")
+    labels = job_input.get("labels")
+
+    if not image_url:
+        return {"error": "Missing image_url parameter"}
+    if points is None or labels is None:
+        return {"error": "Missing points or labels parameter"}
+
+    try:
+        points = np.array(points, dtype=np.float32)
+        labels = np.array(labels, dtype=np.int32)
+    except ValueError:
+        return {"error": "Invalid format for points or labels"}
+
+    try:
+        response = requests.get(image_url)
+        response.raise_for_status()
+        image = Image.open(BytesIO(response.content))
+    except requests.RequestException as e:
+        return {"error": f"Failed to download image: {str(e)}"}
+    except IOError:
+        return {"error": "Failed to open image"}
+
+    sam2_model = build_sam2(model_cfg, sam2_checkpoint, device="cuda")
+    image_predictor = SAM2ImagePredictor(sam2_model)
+    logger.debug("image predictor initialized successfully.")
+
+    image_np = np.array(image)
+    image_predictor.set_image(image_np)
+
+    print(image_predictor._features["image_embed"].shape, image_predictor._features["image_embed"][-1].shape)
+    try:
+        masks, scores, _ = image_predictor.predict(
+            point_coords=points,
+            point_labels=labels,
+            multimask_output=True,
+        )
+    except Exception as e:
+        return {"error": f"Prediction failed: {str(e)}"}
+
+    sorted_ind = np.argsort(scores)[::-1]
+    masks = masks[sorted_ind]
+    scores = scores[sorted_ind]
+
+    annotated_image = image_np.copy()
+    # Create a debug directory if it doesn't exist
+    debug_dir = "./debug_single_image"
+    os.makedirs(debug_dir, exist_ok=True)
+
+    # Save the original image for reference
+    cv2.imwrite(os.path.join(debug_dir, "original_image.png"), cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR))
+
+    for i, mask in enumerate(masks):
+        zeros = np.sum(mask == 0)
+        ones = np.sum(mask == 1)
+        total = mask.size
+        print(f"Mask {i} shape: {mask.shape}, zeros: {zeros}, ones: {ones}, total: {total}")
+      
+        annotated_image = draw_single_image(mask, annotated_image.copy(), random_color=True)
+        mask_image = (mask[..., None] * 255).astype(np.uint8)
+
+        # Save each mask separately
+        cv2.imwrite(os.path.join(debug_dir, f"mask_{i}.png"), cv2.cvtColor(mask_image, cv2.COLOR_RGBA2BGR))
+        
+        # Save the image with each mask overlay
+        cv2.imwrite(os.path.join(debug_dir, f"annotated_image_{i}.png"), cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR))
+
+    # Add points to the final annotated image
+    show_points(points, labels, annotated_image)
+
+    # Save the final annotated image with all masks and points
+    cv2.imwrite(os.path.join(debug_dir, "final_annotated_image.png"), cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR))
+
+    try:
+        _, annotated_buffer = cv2.imencode('.png', cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR))
+        
+        # Create a combined mask image
+        combined_mask = np.any(masks, axis=0).astype(np.uint8) * 255
+        _, mask_buffer = cv2.imencode('.png', combined_mask)
+        
+    except Exception as e:
+        return {"error": f"Failed to encode output images: {str(e)}"}
+
+    # Upload the annotated image and mask to Bytescale
+    upload_url = "https://api.bytescale.com/v2/accounts/FW25b7k/uploads/binary"
+    headers = {
+        "Authorization": "Bearer public_FW25b7k33rVdd9MShz7yH28Z1HWr",
+        "Content-Type": "image/png"
+    }
+
+    bytescale_image_url = ""
+    bytescale_mask_url = ""
+
+    try:
+        # Upload annotated image
+        response = requests.post(upload_url, headers=headers, data=annotated_buffer.tobytes())
+        response.raise_for_status()
+        bytescale_response = response.json()
+        bytescale_image_url = bytescale_response.get('fileUrl')
+
+        # Upload mask image
+        response = requests.post(upload_url, headers=headers, data=mask_buffer.tobytes())
+        response.raise_for_status()
+        bytescale_response = response.json()
+        bytescale_mask_url = bytescale_response.get('fileUrl')
+    except requests.RequestException as e:
+        return {"error": f"Failed to upload images to Bytescale: {str(e)}"}
+
+    return {
+        "bytescale_image_url": bytescale_image_url,
+        "bytescale_mask_url": bytescale_mask_url,
+        "scores": scores.tolist()
+    }
+
+
+def handler(event):
+    if 'input' not in event:
+        return {"error": "No input provided"}
+
+    action = event['input'].get('action', 'process_video')
+
+    if action == 'process_video':
+        return process_video(event)
+    elif action == 'process_image':
+        return process_image(event)
+    elif action == 'process_single_image':
+        return process_single_image(event)
+    else:
+        return {"error": f"Unknown action: {action}"}
+
+
+runpod.serverless.start({"handler": handler})
 

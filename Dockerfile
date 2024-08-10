@@ -16,12 +16,7 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    build-essential \
-    cmake \
     && rm -rf /var/lib/apt/lists/*
-
-# Upgrade pip
-RUN pip install --upgrade pip
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
@@ -39,4 +34,4 @@ RUN ./download_ckpts.sh
 RUN mv *.pt checkpoints/
 
 # Set the entry point to your Python script
-CMD ["python", "-u", "sam2_serverless.py"]
+CMD ["python", "sam2_serverless.py"]

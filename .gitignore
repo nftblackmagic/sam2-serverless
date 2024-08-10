@@ -11,3 +11,4 @@ checkpoints/*.pt
 temp_frames_*
 static/*
 debug_frames*
+debug_images*

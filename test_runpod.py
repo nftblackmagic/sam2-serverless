@@ -4,8 +4,8 @@ import time
 import sys
 
 # Replace these with your actual values
-ENDPOINT_ID = "9o7a16v9j2tiqm"
-API_KEY = ""
+ENDPOINT_ID = "rdwv01tg75kvwk"
+API_KEY = "WUN4F25QVDDGOKBDPGKT78XYUBT5WH3Z25N4OSIP"
 
 BASE_URL = f"https://api.runpod.ai/v2/{ENDPOINT_ID}"
 HEADERS = {
@@ -16,6 +16,7 @@ HEADERS = {
 def send_request(input_data):
     url = f"{BASE_URL}/run"
     response = requests.post(url, headers=HEADERS, json=input_data)
+    print(response)
     return response.json()
 
 def check_status(job_id):
