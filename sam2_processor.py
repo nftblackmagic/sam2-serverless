@@ -43,6 +43,9 @@ model_cfg = "sam2_hiera_l.yaml"
 predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint)
 logger.debug("Model initialized successfully.")
 
+sam2_model = build_sam2(model_cfg, sam2_checkpoint, device="cuda")
+image_predictor = SAM2ImagePredictor(sam2_model)
+
 def process_video(job):
     job_input = job["input"]
     session_id = job_input.get("session_id")
@@ -165,8 +168,6 @@ def process_single_image(job):
     if image is None:
         return {"error": "Failed to obtain image"}
 
-    sam2_model = build_sam2(model_cfg, sam2_checkpoint, device="cuda")
-    image_predictor = SAM2ImagePredictor(sam2_model)
     logger.debug("image predictor initialized successfully.")
 
     image_np = np.array(image)
