@@ -12,6 +12,7 @@ from sam2.sam2_image_predictor import SAM2ImagePredictor
 from sam2.build_sam import build_sam2
 
 from tqdm import tqdm
+import runpod
 
 
 # Import the image processing functions
@@ -77,6 +78,9 @@ def process_video(job):
             torch.backends.cuda.matmul.allow_tf32 = True
             torch.backends.cudnn.allow_tf32 = True
         # Load inference_state
+        
+        if os.environ.get('RUN_ENV') == 'production':
+            runpod.serverless.progress_update(job, f"Initializing inference state (1/3)")
         inference_state = predictor.init_state(video_path=video_dir)
     except FileNotFoundError:
         return {"error": "Inference state not found. Please upload the video first."}
@@ -109,9 +113,11 @@ def process_video(job):
             out_obj_id: (out_mask_logits[i] > 0.0).cpu().numpy()
             for i, out_obj_id in enumerate(out_obj_ids)
         }
+        if os.environ.get('RUN_ENV') == 'production':
+            runpod.serverless.progress_update(job, f"Update {out_frame_idx}/{len(frame_names)} (2/3)")
 
     # Create output videos
-    output_video_path = create_output_video(session_id, frame_names, video_dir, video_segments)
+    output_video_path = create_output_video(job, session_id, frame_names, video_dir, video_segments)
 
     # Upload video to Bytescale API
     try:

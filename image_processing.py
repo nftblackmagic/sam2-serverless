@@ -11,6 +11,7 @@ import uuid
 import urllib.request
 import json
 import av
+import runpod
 
 def show_mask(mask, image, obj_id=None, random_color=False):
     if random_color:
@@ -166,7 +167,7 @@ def upload_to_bytescale(image_buffer):
     response.raise_for_status()
     return response.json().get('fileUrl')
 
-def create_output_video(session_id, frame_names, video_dir, video_segments):
+def create_output_video(job, session_id, frame_names, video_dir, video_segments):
     output_video_path = f"static/segmented_video_{session_id}.mp4"
 
     # Read video information from the JSON file
@@ -216,6 +217,8 @@ def create_output_video(session_id, frame_names, video_dir, video_segments):
                 output.mux(packet)
             
             pbar.update(1)
+            if os.environ.get('RUN_ENV') == 'production':
+                runpod.serverless.progress_update(job, f"Update {out_frame_idx}/{len(frame_names)} (3/3)")
 
     # Flush the stream
     for packet in stream.encode():
