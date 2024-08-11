@@ -1,8 +1,11 @@
 {
-  "input": {
-      "action": "process_single_image",
-      "input_image_url": "https://upcdn.io/FW25b7k/raw/uploads/test.jpg",
+    "input": {
+      "action": "process_video",
+      "input_video_url": "https://upcdn.io/FW25b7k/raw/uploads/test.mp4",
       "points": [[603, 866]],
-      "labels": [1]
-  }
+      "labels": [1],
+      "ann_frame_idx": 0,
+      "ann_obj_id": 1
+    }
 }
+

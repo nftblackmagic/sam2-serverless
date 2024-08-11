@@ -4,7 +4,7 @@ import time
 import sys
 
 # Replace these with your actual values
-ENDPOINT_ID = "rdwv01tg75kvwk"
+ENDPOINT_ID = "kswcaqyooco6t7"
 API_KEY = "WUN4F25QVDDGOKBDPGKT78XYUBT5WH3Z25N4OSIP"
 
 BASE_URL = f"https://api.runpod.ai/v2/{ENDPOINT_ID}"

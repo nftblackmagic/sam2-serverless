@@ -108,3 +108,4 @@ watchfiles==0.23.0
 wcwidth==0.2.13
 websockets==12.0
 yarl==1.9.4
+av==12.3.0

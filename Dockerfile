@@ -7,7 +7,7 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 COPY . /app
 
-# Install system dependencies including git and OpenCV dependencies
+# Install system dependencies including git, OpenCV dependencies, and additional requested packages
 RUN apt-get update && apt-get install -y \
     wget \
     git \
@@ -16,10 +16,19 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     libxext6 \
     libxrender-dev \
+    build-essential cmake python3-dev python3-numpy \
+    libavcodec-dev libavformat-dev libswscale-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libgstreamer1.0-dev libgtk-3-dev \
+    libpng-dev libjpeg-dev libopenexr-dev libtiff-dev libwebp-dev \
+    libopencv-dev x264 libx264-dev libssl-dev ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install OpenCV from source
+RUN python -m pip install --no-binary opencv-python opencv-python
 
 # Create the checkpoints directory
 RUN mkdir -p checkpoints
@@ -34,4 +43,4 @@ RUN ./download_ckpts.sh
 RUN mv *.pt checkpoints/
 
 # Set the entry point to your Python script
-CMD ["python", "sam2_serverless.py"]
+CMD ["python", "runpod_handler.py"]

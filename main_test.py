@@ -1,6 +1,6 @@
 import json
 import sys
-from sam2_serverless import process_video  # Assuming the main script is named main_script.py
+from sam2_processor import process_video  # Assuming the main script is named main_script.py
 
 def process_video_test(input_file):
     # Read input from JSON file

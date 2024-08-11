@@ -1,0 +1,8 @@
+{
+  "input": {
+      "action": "process_single_image",
+      "input_image_url": "https://upcdn.io/FW25b7k/raw/uploads/test.jpg",
+      "points": [[603, 866]],
+      "labels": [1]
+  }
+}
