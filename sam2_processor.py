@@ -18,7 +18,7 @@ import runpod
 # Import the image processing functions
 from image_processing import (
     show_points, apply_mask,
-    load_image_from_url, encode_image, upload_to_bytescale,
+    load_image_from_url, extract_frame_from_video, encode_image, upload_to_bytescale,
     create_output_video, upload_video_to_bytescale, upload_video  # Add upload_video here
 )
 
@@ -133,11 +133,13 @@ def process_video(job):
 def process_single_image(job):
     job_input = job["input"]
     image_url = job_input.get("input_image_url")
+    video_url = job_input.get("input_video_url")
+    frame_index = job_input.get("ann_frame_idx")
     points = job_input.get("points")
     labels = job_input.get("labels")
 
-    if not image_url:
-        return {"error": "Missing image_url parameter"}
+    if not (image_url or (video_url and frame_index is not None)):
+        return {"error": "Missing image_url or video_url with frame_index"}
     if points is None or labels is None:
         return {"error": "Missing points or labels parameter"}
 
@@ -146,13 +148,22 @@ def process_single_image(job):
         labels = np.array(labels, dtype=np.int32)
     except ValueError:
         return {"error": "Invalid format for points or labels"}
+    
+    if video_url and frame_index is not None:
+        try:
+            image = extract_frame_from_video(video_url, frame_index)
+        except Exception as e:
+            return {"error": f"Failed to extract frame from video: {str(e)}"}
+    else:
+        try:
+            image = load_image_from_url(image_url)
+        except requests.RequestException as e:
+            return {"error": f"Failed to download image: {str(e)}"}
+        except IOError:
+            return {"error": "Failed to open image"}
 
-    try:
-        image = load_image_from_url(image_url)
-    except requests.RequestException as e:
-        return {"error": f"Failed to download image: {str(e)}"}
-    except IOError:
-        return {"error": "Failed to open image"}
+    if image is None:
+        return {"error": "Failed to obtain image"}
 
     sam2_model = build_sam2(model_cfg, sam2_checkpoint, device="cuda")
     image_predictor = SAM2ImagePredictor(sam2_model)

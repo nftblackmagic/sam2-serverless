@@ -153,6 +153,32 @@ def load_image_from_url(image_url):
     response.raise_for_status()
     return Image.open(BytesIO(response.content))
 
+def extract_frame_from_video(video_url, frame_index):
+    # Download the video to a temporary file
+    temp_video_path = f"temp_video_{uuid.uuid4()}.mp4"
+    urllib.request.urlretrieve(video_url, temp_video_path)
+
+    # Open the video file
+    cap = cv2.VideoCapture(temp_video_path)
+
+    # Set the frame position
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+
+    # Read the frame
+    ret, frame = cap.read()
+
+    # Release the video capture object and delete the temporary file
+    cap.release()
+    os.remove(temp_video_path)
+
+    if not ret:
+        raise Exception(f"Failed to extract frame {frame_index} from video")
+
+    # Convert BGR to RGB
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+    return frame_rgb
+
 def encode_image(image):
     _, buffer = cv2.imencode('.png', cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
     return buffer
