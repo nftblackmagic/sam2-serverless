@@ -253,7 +253,7 @@ def encode_image(image):
 def upload_to_bytescale(image_buffer):
     upload_url = "https://api.bytescale.com/v2/accounts/FW25b7k/uploads/binary"
     headers = {
-        "Authorization": "Bearer public_FW25b7k33rVdd9MShz7yH28Z1HWr",
+        "Authorization": f"Bearer {os.environ.get('BYTESCALE_API_KEY', 'public_FW25b7k33rVdd9MShz7yH28Z1HWr')}",
         "Content-Type": "image/png"
     }
     response = requests.post(upload_url, headers=headers, data=image_buffer.tobytes())
@@ -277,22 +277,16 @@ def create_output_video(job, session_id, frame_names, video_dir, video_segments,
     height = height if height % 2 == 0 else height + 1
 
     # Create output container
-    output_video_path = f"static/segmented_video_{session_id}.{'mov' if mode in ['masked_image'] else 'mp4'}"
+    output_video_path = f"static/segmented_video_{session_id}.mp4"
     output = av.open(output_video_path, mode='w')
     
-    if mode in ['masked_image']:
-        # Use Apple ProRes 4444 for masked_image and mask_only modes
-        stream = output.add_stream('prores', rate='{0:.4f}'.format(fps))
-        stream.codec_tag = 'ap4h'  # ProRes 4444
-        stream.pix_fmt = 'yuva444p10le'
-    else:
-        # Use H.264 for other modes
-        stream = output.add_stream('h264', rate='{0:.4f}'.format(fps))
-        stream.pix_fmt = 'yuv420p'
-        stream.options = {
-            'crf': '23',  # Default CRF value, good balance between quality and file size
-            'preset': 'medium'  # Default preset, balances encoding speed and compression efficiency
-        }
+    # Use H.264 for other modes
+    stream = output.add_stream('h264', rate='{0:.4f}'.format(fps))
+    stream.pix_fmt = 'yuv420p'
+    stream.options = {
+        'crf': '23',  # Default CRF value, good balance between quality and file size
+        'preset': 'medium'  # Default preset, balances encoding speed and compression efficiency
+    }
     
     stream.width = width
     stream.height = height
@@ -308,22 +302,10 @@ def create_output_video(job, session_id, frame_names, video_dir, video_segments,
                 annotated_frame = annotate_frame(out_frame_idx, frame_names, video_dir, mode)
             
             # Convert BGR to RGBA for masked_image and mask_only modes
-            if mode in ['masked_image']:
-                if annotated_frame.shape[2] == 3:
-                    # If the frame is BGR, convert to BGRA first
-                    frame_bgra = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2BGRA)
-                    frame_rgba = cv2.cvtColor(frame_bgra, cv2.COLOR_BGRA2RGBA)
-                else:
-                    # If the frame is already BGRA, just convert to RGBA
-                    frame_rgba = cv2.cvtColor(annotated_frame, cv2.COLOR_BGRA2RGBA)
-            else:
-                frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+            frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
             
             # Create PyAV video frame
-            if mode in ['masked_image']:
-                frame = av.VideoFrame.from_ndarray(frame_rgba, format='rgba')
-            else:
-                frame = av.VideoFrame.from_ndarray(frame_rgb, format='rgb24')
+            frame = av.VideoFrame.from_ndarray(frame_rgb, format='rgb24')
             
             # Encode and write the frame
             for packet in stream.encode(frame):
@@ -345,7 +327,7 @@ def create_output_video(job, session_id, frame_names, video_dir, video_segments,
 def upload_video_to_bytescale(video_path):
     upload_url = "https://api.bytescale.com/v2/accounts/FW25b7k/uploads/binary"
     headers = {
-        "Authorization": "Bearer public_FW25b7k33rVdd9MShz7yH28Z1HWr",
+        "Authorization": f"Bearer {os.environ.get('BYTESCALE_API_KEY', 'public_FW25b7k33rVdd9MShz7yH28Z1HWr')}",
         "Content-Type": "video/mp4" if video_path.lower().endswith('.mp4') else "video/quicktime" if video_path.lower().endswith('.mov') else f"video/{os.path.splitext(video_path)[1][1:]}"
     }
 

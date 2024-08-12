@@ -8,24 +8,34 @@ This project is a serverless application using RunPod to process videos and sing
 - Process single images using SAM2
 - Serverless architecture using RunPod
 
+## Dependencies
+- SAM2 
+- File uploader bytescale (API key BYTESCALE_API_KEY required)
+
 ## Requirements
 
 - Python 3.x
 - RunPod SDK
-- SAM2 processor (not included in this repository)
 
 ## Installation
 
 1. Clone this repository
 2. Install the required dependencies:
    ```
-   pip install runpod
+   pip install -r requirements.txt
    ```
-3. Ensure you have the SAM2 processor installed and configured
 
 ## Usage
 
 The main handler function in `runpod_handler.py` processes incoming events and routes them to the appropriate function based on the `action` parameter.
+
+To run the handler locally for testing, use the following command:
+
+```
+python runpod_handler.py
+```
+
+It will load the file test_input.json and process the event.
 
 ### Processing a Video
 
@@ -58,7 +68,7 @@ Send an event with the following structure:
 ## File Structure
 
 - `runpod_handler.py`: Main handler for RunPod serverless functions
-- `sam2_processor.py`: Contains the `process_video` and `process_single_image` functions (not included in this repository)
+- `sam2_processor.py`: Contains the `process_video` and `process_single_image` functions 
 
 ## Contributing
 
@@ -66,4 +76,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-[Add your chosen license here]
+MIT License
