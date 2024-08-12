@@ -54,6 +54,7 @@ def process_video(job):
     ann_frame_idx = job_input["ann_frame_idx"]
     ann_obj_id = job_input["ann_obj_id"]
     input_video_url = job_input.get("input_video_url")
+    mode = job_input.get("mode")
     
     # Validate that either session_id or input_video_url is provided
     if session_id is None and input_video_url is None:
@@ -117,10 +118,10 @@ def process_video(job):
             for i, out_obj_id in enumerate(out_obj_ids)
         }
         if os.environ.get('RUN_ENV') == 'production':
-            runpod.serverless.progress_update(job, f"Update {out_frame_idx}/{len(frame_names)} (2/3)")
+            runpod.serverless.progress_update(job, f"Segment update {out_frame_idx}/{len(frame_names)} (2/3)")
 
     # Create output videos
-    output_video_path = create_output_video(job, session_id, frame_names, video_dir, video_segments)
+    output_video_path = create_output_video(job, session_id, frame_names, video_dir, video_segments, mode)
 
     # Upload video to Bytescale API
     try:

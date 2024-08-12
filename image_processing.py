@@ -128,25 +128,92 @@ def show_points(coords, labels, image, marker_size=20):
         cv2.circle(image, tuple(point.astype(int)), marker_size // 2, (0, 0, 255), -1)
         cv2.circle(image, tuple(point.astype(int)), marker_size // 2, (255, 255, 255), 2)
 
-def annotate_frame(frame_idx, frame_names, video_dir, masks=None, points=None, labels=None):
+def process_mask(mask, img_shape, color):
+    # Process mask
+    if mask.ndim == 2:
+        h, w = mask.shape
+    elif mask.ndim == 3:
+        h, w = mask.shape[1:]
+        mask = mask.squeeze(0)  # Remove the first dimension if it's (1, h, w)
+    else:
+        raise ValueError("Unexpected mask shape")
+    
+    # Convert boolean mask to uint8 before resizing
+    mask = mask.astype(np.uint8) * 255
+    
+    # Ensure mask has the same shape as the image
+    mask = cv2.resize(mask, (img_shape[1], img_shape[0]))
+    
+    # Normalize the mask back to 0-1 range
+    mask = mask / 255.0
+    
+    # Create colored mask
+    colored_mask = (mask[:, :, np.newaxis] * color).astype(np.uint8)
+    
+    # Create alpha channel
+    alpha = (mask * 255).astype(np.uint8)
+    
+    return colored_mask, alpha
+
+def annotate_frame(frame_idx, frame_names, video_dir, mode, masks=None, points=None, labels=None):
     # Load the image
     img_path = os.path.join(video_dir, frame_names[frame_idx])
     img = cv2.imread(img_path)
     
-    # Display points and masks if provided
+    # Display points if provided
     if points is not None and labels is not None:
         show_points(points, labels, img)
+    
     if masks is not None:
-        for obj_id, mask in masks.items():
-            img = apply_mask(mask, img, obj_id=obj_id)
+        if mode == "overlayer":
+            # Current logic: mask applied to image
+            for obj_id, mask in masks.items():
+                img = apply_mask(mask, img, obj_id=obj_id)
+        elif mode == "masked_image":
+            # Only show the masked region, other regions are transparent
+            result = np.zeros((img.shape[0], img.shape[1], 4), dtype=np.uint8)
+            for obj_id, mask in masks.items():
+                color = np.array([255, 255, 255])  # Use white color to preserve original image colors
+                colored_mask, alpha = process_mask(mask, img.shape, color)
+                # Apply the mask to the original image
+                masked_region = cv2.bitwise_and(img, colored_mask)
+                result[:, :, :3] += masked_region
+                result[:, :, 3] += alpha
+            img = result
+        elif mode == "mask_only":
+            # Only show the mask
+            result = np.zeros((img.shape[0], img.shape[1], 4), dtype=np.uint8)
+            for obj_id, mask in masks.items():
+                color = np.array(get_color(obj_id))
+                colored_mask, alpha = process_mask(mask, img.shape, color)
+                result[:, :, :3] += colored_mask
+                result[:, :, 3] += alpha
+            img = result
+        else:
+            raise ValueError(f"Unknown mode: {mode}")
     
     # Save the image locally for debugging
     debug_output_dir = "./debug_frames"
     os.makedirs(debug_output_dir, exist_ok=True)
-    debug_frame_path = os.path.join(debug_output_dir, f"frame_{frame_idx}.png")
+    debug_frame_path = os.path.join(debug_output_dir, f"frame_{frame_idx}_{mode}.png")
     cv2.imwrite(debug_frame_path, img)
     
     return img
+
+def get_color(obj_id):
+    colors = [
+        (70, 130, 180),   # Steel Blue
+        (255, 160, 122),  # Light Salmon
+        (152, 251, 152),  # Pale Green
+        (221, 160, 221),  # Plum
+        (176, 196, 222),  # Light Steel Blue
+        (255, 182, 193),  # Light Pink
+        (240, 230, 140),  # Khaki
+        (216, 191, 216),  # Thistle
+        (173, 216, 230),  # Light Blue
+        (255, 228, 196)   # Bisque
+    ]
+    return colors[obj_id % len(colors)]
 
 def load_image_from_url(image_url):
     response = requests.get(image_url)
@@ -193,8 +260,7 @@ def upload_to_bytescale(image_buffer):
     response.raise_for_status()
     return response.json().get('fileUrl')
 
-def create_output_video(job, session_id, frame_names, video_dir, video_segments):
-    output_video_path = f"static/segmented_video_{session_id}.mp4"
+def create_output_video(job, session_id, frame_names, video_dir, video_segments, mode):
 
     # Read video information from the JSON file
     video_info_path = os.path.join(video_dir, "video_settings.json")
@@ -211,16 +277,25 @@ def create_output_video(job, session_id, frame_names, video_dir, video_segments)
     height = height if height % 2 == 0 else height + 1
 
     # Create output container
+    output_video_path = f"static/segmented_video_{session_id}.{'mov' if mode in ['masked_image'] else 'mp4'}"
     output = av.open(output_video_path, mode='w')
-    stream = output.add_stream('h264', rate='{0:.4f}'.format(fps))
+    
+    if mode in ['masked_image']:
+        # Use Apple ProRes 4444 for masked_image and mask_only modes
+        stream = output.add_stream('prores', rate='{0:.4f}'.format(fps))
+        stream.codec_tag = 'ap4h'  # ProRes 4444
+        stream.pix_fmt = 'yuva444p10le'
+    else:
+        # Use H.264 for other modes
+        stream = output.add_stream('h264', rate='{0:.4f}'.format(fps))
+        stream.pix_fmt = 'yuv420p'
+        stream.options = {
+            'crf': '23',  # Default CRF value, good balance between quality and file size
+            'preset': 'medium'  # Default preset, balances encoding speed and compression efficiency
+        }
+    
     stream.width = width
     stream.height = height
-    stream.pix_fmt = 'yuv420p'
-    # Set the video quality
-    stream.options = {
-        'crf': '23',  # Default CRF value, good balance between quality and file size
-        'preset': 'medium'  # Default preset, balances encoding speed and compression efficiency
-    }
 
     vis_frame_stride = 1
     total_frames = len(range(0, len(frame_names), vis_frame_stride))
@@ -228,15 +303,27 @@ def create_output_video(job, session_id, frame_names, video_dir, video_segments)
     with tqdm(total=total_frames, desc="Writing video", unit="frame") as pbar:
         for out_frame_idx in range(0, len(frame_names), vis_frame_stride):
             if out_frame_idx in video_segments:
-                annotated_frame = annotate_frame(out_frame_idx, frame_names, video_dir, masks=video_segments[out_frame_idx])
+                annotated_frame = annotate_frame(out_frame_idx, frame_names, video_dir, mode, masks=video_segments[out_frame_idx])
             else:
-                annotated_frame = annotate_frame(out_frame_idx, frame_names, video_dir)
+                annotated_frame = annotate_frame(out_frame_idx, frame_names, video_dir, mode)
             
-            # Convert BGR to RGB
-            frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
+            # Convert BGR to RGBA for masked_image and mask_only modes
+            if mode in ['masked_image']:
+                if annotated_frame.shape[2] == 3:
+                    # If the frame is BGR, convert to BGRA first
+                    frame_bgra = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2BGRA)
+                    frame_rgba = cv2.cvtColor(frame_bgra, cv2.COLOR_BGRA2RGBA)
+                else:
+                    # If the frame is already BGRA, just convert to RGBA
+                    frame_rgba = cv2.cvtColor(annotated_frame, cv2.COLOR_BGRA2RGBA)
+            else:
+                frame_rgb = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
             
             # Create PyAV video frame
-            frame = av.VideoFrame.from_ndarray(frame_rgb, format='rgb24')
+            if mode in ['masked_image']:
+                frame = av.VideoFrame.from_ndarray(frame_rgba, format='rgba')
+            else:
+                frame = av.VideoFrame.from_ndarray(frame_rgb, format='rgb24')
             
             # Encode and write the frame
             for packet in stream.encode(frame):
@@ -244,7 +331,7 @@ def create_output_video(job, session_id, frame_names, video_dir, video_segments)
             
             pbar.update(1)
             if os.environ.get('RUN_ENV') == 'production':
-                runpod.serverless.progress_update(job, f"Update {out_frame_idx}/{len(frame_names)} (3/3)")
+                runpod.serverless.progress_update(job, f"Writing video update {out_frame_idx}/{len(frame_names)} (3/3)")
 
     # Flush the stream
     for packet in stream.encode():
@@ -259,7 +346,7 @@ def upload_video_to_bytescale(video_path):
     upload_url = "https://api.bytescale.com/v2/accounts/FW25b7k/uploads/binary"
     headers = {
         "Authorization": "Bearer public_FW25b7k33rVdd9MShz7yH28Z1HWr",
-        "Content-Type": "video/mp4"
+        "Content-Type": "video/mp4" if video_path.lower().endswith('.mp4') else "video/quicktime" if video_path.lower().endswith('.mov') else f"video/{os.path.splitext(video_path)[1][1:]}"
     }
 
     with open(video_path, 'rb') as video_file:

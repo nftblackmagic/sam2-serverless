@@ -1,6 +1,6 @@
 {
     "input": {
-      "action": "process_video",
+      "action": "process_single_image",
       "input_video_url": "https://upcdn.io/FW25b7k/raw/uploads/test.mp4",
       "points": [[603, 866]],
       "labels": [1],
