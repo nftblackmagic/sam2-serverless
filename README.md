@@ -10,7 +10,7 @@ This project is a serverless application using RunPod to process videos and sing
 
 ## Dependencies
 - SAM2 
-- File uploader bytescale (API key BYTESCALE_API_KEY required)
+- File uploader [bytescale](https://bytescale.com/) (API key BYTESCALE_API_KEY required) 
 
 ## Requirements
 
@@ -24,6 +24,12 @@ This project is a serverless application using RunPod to process videos and sing
    ```
    pip install -r requirements.txt
    ```
+3. Download the weights for SAM2 from the [official repository](https://github.com/IDEA-Research/SAM2)
+   ```
+   ./download_weights.sh
+   mv *.pt checkpoints/
+   ```
+4. Set the BYTESCALE_API_KEY environment variable to your bytescale API key
 
 ## Usage
 
